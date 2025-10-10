@@ -1,9 +1,10 @@
 import io
 import PyPDF2
-from openai import OpenAI
+from groq import Groq
+import os
 
 
-client = OpenAI()
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
 def parse_resume(file_bytes: bytes):
@@ -11,7 +12,7 @@ def parse_resume(file_bytes: bytes):
     text = " ".join([page.extract_text() for page in reader.pages if page.extract_text()])
     prompt = f"Extract key skills as a list from this resume text: {text[:4000]}"
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="llama-3.1-8b-instant",
         messages=[{"role":"user","content":prompt}]
     )
     skills_text = response.choices[0].message.content

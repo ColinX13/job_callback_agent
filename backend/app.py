@@ -1,4 +1,9 @@
-from fastapi import FastAPI, UploadFile, File
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+from fastapi import FastAPI, UploadFile, File, Body
 from fastapi.middleware.cors import CORSMiddleware
 from parser import parse_resume
 from embedding import embed_text
@@ -18,18 +23,30 @@ app.add_middleware(
 
 @app.post("/upload_resume/")
 async def upload_resume(file: UploadFile = File(...)):
-    text, skills = parse_resume(await file.read())
-    embedding = embed_text(text)
-    return {"resume_text": text, "skills": skills, "embedding": embedding}
+    print("Received file:", file.filename)
+    try:
+        file_bytes = await file.read()
+        text, skills = parse_resume(file_bytes)
+        embedding = embed_text(text)
+        return {"resume_text": text, "skills": skills, "embedding": embedding}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @app.post("/rank_jobs/")
-def rank_jobs_endpoint(resume_text: str, embedding: list, skills: list):
+def rank_jobs_endpoint(payload: dict = Body(...)):
+    resume_text = payload["resume_text"]
+    embedding = payload["embedding"]
+    skills = payload["skills"]
     ranked = rank_jobs(resume_text, embedding, skills)
     return {"ranked_jobs": ranked}
 
 
 @app.post("/explain_match/")
-def explain_endpoint(resume_text: str, job_title: str, job_desc: str, score: float):
+def explain_endpoint(payload: dict = Body(...)):
+    resume_text = payload["resume_text"]
+    job_title = payload["job_title"]
+    job_desc = payload["job_desc"]
+    score = payload["score"]
     explanation = explain_match(resume_text, job_title, job_desc, score)
     return {"explanation": explanation}
