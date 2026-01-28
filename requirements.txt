@@ -5,3 +5,6 @@ requests
 groq
 PyPDF2
 numpy
+python-dotenv
+sentence_transformers
+python-multipart
