@@ -6,7 +6,7 @@ API_URL = "http://localhost:8000"
 
 
 def main():
-    st.title("AI Job Callback Agent")
+    st.title("Job Callback Agent")
     uploaded = st.file_uploader("Upload your resume (PDF)")
     if uploaded and "resume_data" not in st.session_state:
         files = {"file": uploaded.getvalue()}
@@ -24,8 +24,8 @@ def main():
         if st.button("Find Best Jobs"):
             payload = {"resume_text": resume_text, "embedding": emb, "skills": skills}
             ranked = requests.post(f"{API_URL}/rank_jobs/", json=payload).json()
-            st.session_state.ranked_jobs = ranked['ranked_jobs']
             print("Ranked jobs response: ", ranked)  # Debug print
+            st.session_state.ranked_jobs = ranked["ranked_jobs"]
         
     if "ranked_jobs" in st.session_state:
         for idx, job in enumerate(st.session_state.ranked_jobs):

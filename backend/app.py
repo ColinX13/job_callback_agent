@@ -3,7 +3,9 @@ import os
 
 load_dotenv()
 
-from fastapi import FastAPI, UploadFile, File, Body
+from fastapi import FastAPI, UploadFile, File, Body, Depends
+from sqlalchemy.orm import Session
+from db import SessionLocal
 from fastapi.middleware.cors import CORSMiddleware
 from parser import parse_resume
 from embedding import embed_text
@@ -20,6 +22,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 
 @app.post("/upload_resume/")
 async def upload_resume(file: UploadFile = File(...)):
@@ -32,15 +41,19 @@ async def upload_resume(file: UploadFile = File(...)):
     except Exception as e:
         return {"error": str(e)}
 
+@app.get("/jobs/")
+def list_jobs(db: Session = Depends(get_db)):
+    jobs = db.query(Jobs).all()
+    return {"jobs": jobs}
+
 
 @app.post("/rank_jobs/")
-def rank_jobs_endpoint(payload: dict = Body(...)):
-    resume_text = payload["resume_text"]
-    embedding = payload["embedding"]
-    skills = payload["skills"]
-    ranked = rank_jobs(resume_text, embedding, skills)
+def rank_jobs_endpoint(payload: dict = Body(...), db: Session = Depends(get_db)):
+    resume_text = payload.get("resume_text")
+    resume_emb = payload.get("embedding") or payload.get("resume_emb")
+    resume_skills = payload.get("skills") or payload.get("resume_skills")
+    ranked = rank_jobs(db, resume_text, resume_emb, resume_skills)
     return {"ranked_jobs": ranked}
-
 
 @app.post("/explain_match/")
 def explain_endpoint(payload: dict = Body(...)):
