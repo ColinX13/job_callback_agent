@@ -1,8 +1,9 @@
 import requests
 from sqlalchemy.orm import Session
-from backend.db import SessionLocal
-from backend.models import Jobs
-from backend.embedding import embed_text
+from ..db import SessionLocal
+from ..models import Jobs
+from ..embedding import embed_text
+import json
 
 # using remotive API for job listings
 remotive_url = "https://remotive.com/api/remote-jobs?category=software-dev"
