@@ -12,9 +12,14 @@ Root Folder:
 3. Run `pip3 install -r requirements.txt`
 
 Start Backend:
-1. `cd backend`
-2. Run `uvicorn app:app --reload`
+1. Run `python3 -m backend`
 
 Start Frontend:
 1. `cd frontend`
 2. Run `streamlit run streamlit_app.py`
+
+Testing:
+1. Run `pytest`
+2. For coverage run: 
+    - `pip3 install pytest-cov`
+    - `pytest --cov=backend --cov-report=html`

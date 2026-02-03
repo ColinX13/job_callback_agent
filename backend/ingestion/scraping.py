@@ -6,13 +6,19 @@ from backend.embedding import embed_text
 
 # using remotive API for job listings
 remotive_url = "https://remotive.com/api/remote-jobs?category=software-dev"
-print("This is the remotive api url: ",remotive_url)
+# print("This is the remotive api url: ",remotive_url)
 
 def fetch_jobs():
-    response = requests.get(remotive_url, timeout=10)
-    response.raise_for_status()
-    data = response.json()["jobs"]
-    return data
+    try:
+        response = requests.get(remotive_url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        jobs = data["jobs"]
+        return jobs
+    except requests.RequestException as e:
+        raise ValueError(f"Scraping Error - Error fetching jobs from API: {str(e)}")
+    except KeyError:
+        raise ValueError(f"Scraping Error - Unexpected API response structure: {data}")
 
 # Normalize job data to match our DB schema
 def normalize_job(job):
@@ -33,41 +39,47 @@ def normalize_job(job):
 
 # Collect and ingest jobs into the database
 def ingest_jobs():
-    db: Session = SessionLocal()
-    jobs = fetch_jobs()
+    try:
+        db: Session = SessionLocal()
+        jobs = fetch_jobs()
 
-    inserted_count = 0
+        inserted_count = 0
 
-    for job in jobs:
-        normalized = normalize_job(job)
+        for job in jobs:
+            normalized = normalize_job(job)
 
-        exists = db.query(Jobs).filter(
-            Jobs.title == normalized["title"],
-            Jobs.company == normalized["company"]
-        ).first()
+            exists = db.query(Jobs).filter(
+                Jobs.title == normalized["title"],
+                Jobs.company == normalized["company"]
+            ).first()
 
-        print("exists result: ", exists)
+            # print("exists result: ", exists)
 
-        # avoid duplicates
-        if exists:
-            continue
+            # avoid duplicates
+            if exists:
+                continue
 
-        db_job = Jobs(
-            title=normalized["title"],
-            company=normalized["company"],
-            description=normalized["description"],
-            remote=normalized["remote"],
-            skills=normalized["skills"],
-            embedding=normalized["embedding"],
-        )
-        db.add(db_job)
-        inserted_count += 1
-        print("inserted_count: ", inserted_count)
+            db_job = Jobs(
+                title=normalized["title"],
+                company=normalized["company"],
+                description=normalized["description"],
+                remote=normalized["remote"],
+                skills=normalized["skills"],
+                embedding=normalized["embedding"],
+            )
+            db.add(db_job)
+            inserted_count += 1
+            print("inserted_count: ", inserted_count)
 
-    db.commit()
-    db.close()
+        db.commit()
 
-    print(f"Inserted {inserted_count} new jobs into the database.")
+        print(f"Inserted {inserted_count} new jobs into the database.")
+    except Exception as e:
+        db.rollback()
+        raise ValueError(f"Scraping Error - Ingestion error: {str(e)}")
+    finally:
+        db.close()
+
 
 if __name__ == "__main__":
     ingest_jobs()

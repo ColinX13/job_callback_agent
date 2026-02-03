@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from dotenv import load_dotenv
 import os
 
@@ -39,27 +40,40 @@ async def upload_resume(file: UploadFile = File(...)):
         embedding = embed_text(text)
         return {"resume_text": text, "skills": skills, "embedding": embedding}
     except Exception as e:
-        return {"error": str(e)}
+        return HTTPException(status_code=500, detail=f"Error processing resume data: {str(e)}")
 
 @app.get("/jobs/")
 def list_jobs(db: Session = Depends(get_db)):
-    jobs = db.query(Jobs).all()
-    return {"jobs": jobs}
+    try:
+        jobs = db.query(Jobs).all()
+        return {"jobs": jobs}
+    except Exception as e:
+        return HTTPException(status_code=500, detail=f"Error fetching jobs: {str(e)}")
 
 
 @app.post("/rank_jobs/")
 def rank_jobs_endpoint(payload: dict = Body(...), db: Session = Depends(get_db)):
-    resume_text = payload.get("resume_text")
-    resume_emb = payload.get("embedding") or payload.get("resume_emb")
-    resume_skills = payload.get("skills") or payload.get("resume_skills")
-    ranked = rank_jobs(db, resume_text, resume_emb, resume_skills)
-    return {"ranked_jobs": ranked}
+    try:
+        resume_text = payload.get("resume_text")
+        resume_emb = payload.get("embedding") or payload.get("resume_emb")
+        resume_skills = payload.get("skills") or payload.get("resume_skills")
+        if not resume_text or not resume_emb or not resume_skills:
+            raise ValueError("Missing required fields: resume_text, embedding, or skills")
+        ranked = rank_jobs(db, resume_text, resume_emb, resume_skills)
+        return {"ranked_jobs": ranked}
+    except Exception as e:
+        return HTTPException(status_code=500, detail=f"Error ranking jobs: {str(e)}")
 
 @app.post("/explain_match/")
 def explain_endpoint(payload: dict = Body(...)):
-    resume_text = payload["resume_text"]
-    job_title = payload["job_title"]
-    job_desc = payload["job_desc"]
-    score = payload["score"]
-    explanation = explain_match(resume_text, job_title, job_desc, score)
-    return {"explanation": explanation}
+    try:
+        resume_text = payload["resume_text"]
+        job_title = payload["job_title"]
+        job_desc = payload["job_desc"]
+        score = payload["score"]
+        explanation = explain_match(resume_text, job_title, job_desc, score)
+        return {"explanation": explanation}
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=f"Missing required fields in request: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating score explanation: {str(e)}")
