@@ -5,12 +5,12 @@ load_dotenv()
 
 from fastapi import FastAPI, UploadFile, File, Body, Depends
 from sqlalchemy.orm import Session
-from db import SessionLocal
+from backend.db import SessionLocal
 from fastapi.middleware.cors import CORSMiddleware
-from parser import parse_resume
-from embedding import embed_text
-from scoring import rank_jobs
-from explanation import explain_match
+from backend.parser import parse_resume
+from backend.embedding import embed_text
+from backend.scoring import rank_jobs
+from backend.explanation import explain_match
 
 
 app = FastAPI()
