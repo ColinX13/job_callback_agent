@@ -1,7 +1,7 @@
 import json
 from sqlalchemy.orm import Session
-from models import Jobs
-from embedding import cosine_sim, embed_text
+from backend.models import Jobs
+from backend.embedding import cosine_sim, embed_text
 
 
 # def load_jobs():
