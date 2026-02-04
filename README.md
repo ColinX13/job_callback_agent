@@ -23,3 +23,9 @@ Testing:
 2. For coverage run: 
     - `pip3 install pytest-cov`
     - `pytest --cov=backend --cov-report=html`
+
+
+Data Ingestion:
+New data is ingested into the Database via a background task with FastAPI
+Run this for manual trigger while backend is running:
+    - `curl -X POST http://127.0.0.1:8000/admin/ingest_jobs/`

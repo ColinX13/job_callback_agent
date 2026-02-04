@@ -1,10 +1,11 @@
 from fastapi import HTTPException
 from dotenv import load_dotenv
+import asyncio
 import os
 
 load_dotenv()
 
-from fastapi import FastAPI, UploadFile, File, Body, Depends
+from fastapi import FastAPI, UploadFile, File, Body, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from backend.db import SessionLocal
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +13,7 @@ from backend.parser import parse_resume
 from backend.embedding import embed_text
 from backend.scoring import rank_jobs
 from backend.explanation import explain_match
+from backend.ingestion.scraping import ingest_jobs
 
 
 app = FastAPI()
@@ -29,7 +31,24 @@ def get_db():
         yield db
     finally:
         db.close()
+    
+async def scheduled_scraping():
+    while True:
+        try:
+            ingest_jobs()
+        except Exception as e:
+            print(f"Error during scheduled scraping: {str(e)}")
+        await asyncio.sleep(60 * 60 * 24) # every 24 hours
+    asyncio.create_task(scheduled_scraping())
 
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(scheduled_scraping())
+
+@app.post("/admin/ingest_jobs/")
+def trigger_scraping(background_tasks: BackgroundTasks):
+    background_tasks.add_task(ingest_jobs)
+    return {"status": "Scraping started in background"}
 
 @app.post("/upload_resume/")
 async def upload_resume(file: UploadFile = File(...)):

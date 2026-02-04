@@ -1,7 +1,8 @@
 import pytest
+import asyncio
 from fastapi.testclient import TestClient
-from unittest.mock import patch
-from backend.app import app
+from unittest.mock import patch, AsyncMock
+from backend.app import app, startup_event, scheduled_scraping
 from backend.db import SessionLocal
 from backend.models import Jobs
 
@@ -12,6 +13,37 @@ def db_session():
     db = SessionLocal()
     yield db
     db.close()
+
+@pytest.mark.asyncio
+async def test_startup_event():
+    # Mock ingest_jobs and asyncio.create_task
+    with patch('backend.app.ingest_jobs') as mock_ingest, \
+         patch('backend.app.asyncio.create_task') as mock_create_task:
+        await startup_event()  # Call the function
+        
+        # Check that create_task was called (starts the loop)
+        mock_create_task.assert_called_once()
+        # The task's coro should be the scheduled_scraping function
+        task_coro = mock_create_task.call_args[0][0]
+        assert asyncio.iscoroutine(task_coro)  # It's a coroutine
+
+@pytest.mark.asyncio
+async def test_scheduled_scraping():
+    with patch('backend.app.ingest_jobs') as mock_ingest, \
+         patch('backend.app.asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
+        
+        mock_sleep.side_effect = [None, Exception("Stop loop")]  # Stop after first iteration
+        async def run_once():
+            try:
+                await scheduled_scraping()
+            except Exception as e:
+                if str(e) != "Stop loop":
+                    raise
+
+        await run_once()
+        
+        assert mock_ingest.call_count >= 1
+        mock_sleep.assert_called_with(60 * 60 * 24)
 
 def test_upload_resume(db_session):
     # Mock parse_resume to return dummy data
@@ -25,6 +57,13 @@ def test_upload_resume(db_session):
         assert data["resume_text"] == "dummy text"
         assert "skills" in data
         assert "embedding" in data
+
+def test_trigger_scraping():
+    with patch('backend.app.ingest_jobs') as mock_ingest:
+        response = client.post("/admin/ingest_jobs/")
+        assert response.status_code == 200
+        data = response.json()
+        assert data == {"status": "Scraping started in background"}
 
 
 def test_rank_jobs(db_session):
