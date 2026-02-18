@@ -1,8 +1,8 @@
 import pytest
-import asyncio
+from contextlib import asynccontextmanager
 from fastapi.testclient import TestClient
-from unittest.mock import patch, AsyncMock
-from backend.app import app, startup_event, scheduled_scraping
+from unittest.mock import patch, AsyncMock, MagicMock
+from backend.app import app, lifespan, scheduled_scraping
 from backend.db import SessionLocal
 from backend.models import Jobs
 
@@ -15,17 +15,15 @@ def db_session():
     db.close()
 
 @pytest.mark.asyncio
-async def test_startup_event():
-    # Mock ingest_jobs and asyncio.create_task
-    with patch('backend.app.ingest_jobs') as mock_ingest, \
-         patch('backend.app.asyncio.create_task') as mock_create_task:
-        await startup_event()  # Call the function
-        
-        # Check that create_task was called (starts the loop)
-        mock_create_task.assert_called_once()
-        # The task's coro should be the scheduled_scraping function
-        task_coro = mock_create_task.call_args[0][0]
-        assert asyncio.iscoroutine(task_coro)  # It's a coroutine
+async def test_lifespan_startup():
+    with patch('backend.app.scheduled_scraping', new_callable=AsyncMock) as mock_scheduled:
+        with patch('backend.app.asyncio.create_task') as mock_create_task:
+            app_mock = MagicMock()
+            async with lifespan(app_mock):
+                pass
+            
+            # Verify create_task was called during startup
+            mock_create_task.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_scheduled_scraping():
