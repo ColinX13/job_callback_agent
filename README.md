@@ -1,3 +1,7 @@
+## General Overview of Project:
+
+Refer to: https://docs.google.com/document/d/1fNEgt7rAxB9X0wAOjj0IWAPVZN47meLTyytT3zOaM2s/edit?tab=t.0
+
 ## Instructions:
 
 Requires Git and Python installation prior:
