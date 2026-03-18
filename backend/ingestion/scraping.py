@@ -4,13 +4,10 @@ from backend.db import SessionLocal
 from backend.models import Jobs
 from backend.embedding import embed_text
 
-# using remotive API for job listings
-remotive_url = "https://remotive.com/api/remote-jobs?category=software-dev"
-# print("This is the remotive api url: ",remotive_url)
 
-def fetch_jobs():
+def fetch_jobs(api_url):
     try:
-        response = requests.get(remotive_url, timeout=10)
+        response = requests.get(api_url, timeout=10)
         response.raise_for_status()
         data = response.json()
         jobs = data["jobs"]
@@ -41,11 +38,12 @@ def normalize_job(job):
 def ingest_jobs():
     try:
         db: Session = SessionLocal()
-        jobs = fetch_jobs()
+        all_jobs = []
+        all_jobs.extend(fetch_jobs("https://remotive.com/api/remote-jobs?category=software-dev"))
 
         inserted_count = 0
 
-        for job in jobs:
+        for job in all_jobs:
             normalized = normalize_job(job)
 
             exists = db.query(Jobs).filter(

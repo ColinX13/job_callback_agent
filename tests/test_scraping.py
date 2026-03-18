@@ -11,15 +11,16 @@ def test_fetch_jobs_success():
     mock_response.json.return_value = {"jobs": [{"title": "Test Job"}]}
     
     with patch('backend.ingestion.scraping.requests.get', return_value=mock_response) as mock_get:
-        jobs = fetch_jobs()
+        url = "https://remotive.com/api/remote-jobs?category=software-dev"
+        jobs = fetch_jobs(url)
         assert jobs == [{"title": "Test Job"}]
-        mock_get.assert_called_once_with("https://remotive.com/api/remote-jobs?category=software-dev", timeout=10)
+        mock_get.assert_called_once_with(url, timeout=10)
 
 
 def test_fetch_jobs_api_error():
     with patch('backend.ingestion.scraping.requests.get', side_effect=requests.RequestException("Network error")):
         with pytest.raises(ValueError, match="Scraping Error - Error fetching jobs from API: Network error"):
-            fetch_jobs()
+            fetch_jobs("https://remotive.com/api/remote-jobs?category=software-dev")
 
 
 def test_fetch_jobs_invalid_response():
@@ -28,7 +29,7 @@ def test_fetch_jobs_invalid_response():
     
     with patch('backend.ingestion.scraping.requests.get', return_value=mock_response):
         with pytest.raises(ValueError, match="Scraping Error - Unexpected API response structure"):
-            fetch_jobs()
+            fetch_jobs("https://remotive.com/api/remote-jobs?category=software-dev")
 
 
 def test_normalize_job():
