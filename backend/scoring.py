@@ -28,7 +28,8 @@ def rank_jobs(db: Session, resume_text, resume_emb, resume_skills):
                     job_emb = json.loads(job_emb)
                 except Exception:
                     job_emb = []
-            # print("resume_emb:", resume_emb, "job_emb:", job_emb)
+            if len(job_emb) != 384:
+                job_emb = embed_text(f"{job.title} {job.description}")
             sim = cosine_sim(resume_emb, job_emb)
 
             job_skills = job.skills or []

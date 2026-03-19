@@ -30,7 +30,7 @@ def main():
     if "ranked_jobs" in st.session_state:
         for idx, job in enumerate(st.session_state.ranked_jobs):
             st.subheader(f"{job['title']} @ {job['company']}")
-            st.write(f"Fit score: {job['score']}")
+            st.write(f"Fit score: {round(job['score'] * 100, 1)}%")
             if st.button(f"Explain match for {job['title']}", key=f"explain_{idx}"):
                 st.write(f"Requesting explanation for job: {job['title']}")
                 explain = requests.post(f"{API_URL}/explain_match/", json={

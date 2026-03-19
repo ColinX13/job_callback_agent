@@ -1,29 +1,31 @@
+import os
 import requests
 from sqlalchemy.orm import Session
 from backend.db import SessionLocal
 from backend.models import Jobs
 from backend.embedding import embed_text
+import logging
 
 
-def fetch_jobs(api_url):
+def fetch_remotive_jobs(api_url):
     try:
         response = requests.get(api_url, timeout=10)
         response.raise_for_status()
         data = response.json()
-        jobs = data["jobs"]
-        return jobs
+        print(f"Fetched {len(data.get('jobs', []))} jobs from Remotive API")
+        return data["jobs"]
     except requests.RequestException as e:
         raise ValueError(f"Scraping Error - Error fetching jobs from API: {str(e)}")
     except KeyError:
         raise ValueError(f"Scraping Error - Unexpected API response structure: {data}")
 
-# Normalize job data to match our DB schema
-def normalize_job(job):
+
+def normalize_remotive_job(job):
     text_for_embedding = (
         f"{job['title']} {job['description']} {job.get('job_type', '')}"
     )
 
-    normalized = {
+    return {
         "title": job["title"],
         "company": job["company_name"],
         "description": job["description"],
@@ -32,28 +34,65 @@ def normalize_job(job):
         "embedding": embed_text(text_for_embedding),
     }
 
-    return normalized
+
+def fetch_adzuna_jobs(query="software developer", country="gb", results_per_page=50):
+    app_id = os.getenv("ADZUNA_APP_ID")
+    app_key = os.getenv("ADZUNA_APP_KEY")
+    url = (
+        f"http://api.adzuna.com/v1/api/jobs/{country}/search/1"
+        f"?app_id={app_id}&app_key={app_key}"
+        f"&results_per_page={results_per_page}&what={query}&content-type=application/json"
+    )
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        print(f"Fetched {len(data.get('results', []))} jobs from Adzuna API")
+        return data["results"]
+    except requests.RequestException as e:
+        raise ValueError(f"Scraping Error - Error fetching Adzuna jobs: {str(e)}")
+    except KeyError:
+        raise ValueError(f"Scraping Error - Unexpected Adzuna API response structure: {data}")
+
+
+def normalize_adzuna_job(job):
+    title = job.get("title", "")
+    description = job.get("description", "")
+    contract_type = job.get("contract_type", "")
+    text_for_embedding = f"{title} {description} {contract_type}"
+
+    return {
+        "title": title,
+        "company": job.get("company", {}).get("display_name", ""),
+        "description": description,
+        "remote": "remote" in job.get("location", {}).get("display_name", "").lower(),
+        "skills": [],
+        "embedding": embed_text(text_for_embedding),
+    }
+
 
 # Collect and ingest jobs into the database
 def ingest_jobs():
     try:
         db: Session = SessionLocal()
         all_jobs = []
-        all_jobs.extend(fetch_jobs("https://remotive.com/api/remote-jobs?category=software-dev"))
+
+        remotive_jobs = fetch_remotive_jobs("https://remotive.com/api/remote-jobs?category=software-dev")
+        all_jobs.extend((job, normalize_remotive_job) for job in remotive_jobs)
+
+        adzuna_jobs = fetch_adzuna_jobs()
+        all_jobs.extend((job, normalize_adzuna_job) for job in adzuna_jobs)
 
         inserted_count = 0
 
-        for job in all_jobs:
-            normalized = normalize_job(job)
+        for job, normalizer in all_jobs:
+            normalized = normalizer(job)
 
             exists = db.query(Jobs).filter(
                 Jobs.title == normalized["title"],
                 Jobs.company == normalized["company"]
             ).first()
 
-            # print("exists result: ", exists)
-
-            # avoid duplicates
             if exists:
                 continue
 
@@ -70,7 +109,6 @@ def ingest_jobs():
             print("inserted_count: ", inserted_count)
 
         db.commit()
-
         print(f"Inserted {inserted_count} new jobs into the database.")
     except Exception as e:
         db.rollback()

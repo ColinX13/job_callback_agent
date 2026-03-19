@@ -31,21 +31,24 @@ def test_rank_jobs_with_string_embeddings():
 
 
 def test_rank_jobs_with_invalid_string_embeddings():
-    # Test fallback for invalid string embeddings
+    # Test that invalid string embeddings are re-generated via embed_text
     mock_db = MagicMock()
     mock_job = MagicMock()
-    mock_job.embedding = 'invalid json'  # Invalid string
+    mock_job.embedding = 'invalid json'  # Invalid string — falls back to [], then re-embedded
     mock_job.skills = ['python']
     mock_job.id = 1
     mock_job.title = 'Test Job'
     mock_job.company = 'Test Co'
     mock_job.description = 'Desc'
     mock_db.query.return_value.all.return_value = [mock_job]
-    
-    with patch('backend.scoring.cosine_sim', return_value=0.0) as mock_cos:  # Should be called with [] and resume_emb
-        result = rank_jobs(mock_db, 'text', [0.1, 0.2, 0.3], ['python'])
-        
-        mock_cos.assert_called_with([0.1, 0.2, 0.3], [])  # job_emb falls back to []
+
+    re_embedded = [0.5] * 384
+    with patch('backend.scoring.embed_text', return_value=re_embedded) as mock_embed, \
+         patch('backend.scoring.cosine_sim', return_value=0.0) as mock_cos:
+        result = rank_jobs(mock_db, 'text', [0.1] * 384, ['python'])
+
+        mock_embed.assert_called_once_with('Test Job Desc')
+        mock_cos.assert_called_with([0.1] * 384, re_embedded)
 
 
 def test_rank_jobs_with_string_skills():
@@ -99,14 +102,14 @@ def test_rank_jobs(db_session):
     db_session.commit()
 
     # Add test jobs to the database
-    job1 = Jobs(title="Test Job 1", company="Test Company", description="Test Description", skills=["Python"], embedding=[0.1, 0.2, 0.3])
-    job2 = Jobs(title="Test Job 2", company="Test Company", description="Test Description", skills=["Java"], embedding=[0.4, 0.5, 0.6])
+    job1 = Jobs(title="Test Job 1", company="Test Company", description="Test Description", skills=["Python"], embedding=[0.1] * 384)
+    job2 = Jobs(title="Test Job 2", company="Test Company", description="Test Description", skills=["Java"], embedding=[0.4] * 384)
     db_session.add(job1)
     db_session.add(job2)
     db_session.commit()
-    
+
     resume_text = "Test Text"
-    resume_emb = [0.1, 0.2, 0.3]
+    resume_emb = [0.1] * 384
     resume_skills = ["Python"]
     ranked = rank_jobs(db_session, resume_text, resume_emb, resume_skills)
     assert len(ranked) == 2

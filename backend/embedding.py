@@ -6,7 +6,7 @@ model = SentenceTransformer('all-MiniLM-L6-v2')
 
 def embed_text(text: str):
     if not text:
-        return np.zeros((384, ))  # fallback for empty text
+        return np.zeros((384, )).tolist()  # fallback for empty text
     embedding = model.encode(text)
     return embedding.tolist()
 
