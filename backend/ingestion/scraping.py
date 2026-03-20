@@ -3,13 +3,11 @@ import requests
 from sqlalchemy.orm import Session
 from backend.db import SessionLocal
 from backend.models import Jobs
-from backend.embedding import embed_text
-import logging
+from backend.ingestion.normalize import normalize_adzuna_job, normalize_remotive_job
 
-
-def fetch_remotive_jobs(api_url):
+def fetch_remotive_jobs():
     try:
-        response = requests.get(api_url, timeout=10)
+        response = requests.get("https://remotive.com/api/remote-jobs?category=software-dev", timeout=10)
         response.raise_for_status()
         data = response.json()
         print(f"Fetched {len(data.get('jobs', []))} jobs from Remotive API")
@@ -18,22 +16,6 @@ def fetch_remotive_jobs(api_url):
         raise ValueError(f"Scraping Error - Error fetching jobs from API: {str(e)}")
     except KeyError:
         raise ValueError(f"Scraping Error - Unexpected API response structure: {data}")
-
-
-def normalize_remotive_job(job):
-    text_for_embedding = (
-        f"{job['title']} {job['description']} {job.get('job_type', '')}"
-    )
-
-    return {
-        "title": job["title"],
-        "company": job["company_name"],
-        "description": job["description"],
-        "remote": job["candidate_required_location"] == "Worldwide",
-        "skills": job.get("tags", []),
-        "embedding": embed_text(text_for_embedding),
-    }
-
 
 def fetch_adzuna_jobs(query="software developer", country="gb", results_per_page=50):
     app_id = os.getenv("ADZUNA_APP_ID")
@@ -54,30 +36,13 @@ def fetch_adzuna_jobs(query="software developer", country="gb", results_per_page
     except KeyError:
         raise ValueError(f"Scraping Error - Unexpected Adzuna API response structure: {data}")
 
-
-def normalize_adzuna_job(job):
-    title = job.get("title", "")
-    description = job.get("description", "")
-    contract_type = job.get("contract_type", "")
-    text_for_embedding = f"{title} {description} {contract_type}"
-
-    return {
-        "title": title,
-        "company": job.get("company", {}).get("display_name", ""),
-        "description": description,
-        "remote": "remote" in job.get("location", {}).get("display_name", "").lower(),
-        "skills": [],
-        "embedding": embed_text(text_for_embedding),
-    }
-
-
 # Collect and ingest jobs into the database
 def ingest_jobs():
     try:
         db: Session = SessionLocal()
         all_jobs = []
 
-        remotive_jobs = fetch_remotive_jobs("https://remotive.com/api/remote-jobs?category=software-dev")
+        remotive_jobs = fetch_remotive_jobs()
         all_jobs.extend((job, normalize_remotive_job) for job in remotive_jobs)
 
         adzuna_jobs = fetch_adzuna_jobs()
@@ -106,7 +71,7 @@ def ingest_jobs():
             )
             db.add(db_job)
             inserted_count += 1
-            print("inserted_count: ", inserted_count)
+            # print("inserted_count: ", inserted_count)
 
         db.commit()
         print(f"Inserted {inserted_count} new jobs into the database.")

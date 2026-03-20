@@ -1,13 +1,8 @@
 import pytest
 import requests
 from unittest.mock import patch, MagicMock
-from backend.ingestion.scraping import (
-    fetch_remotive_jobs,
-    normalize_remotive_job,
-    fetch_adzuna_jobs,
-    normalize_adzuna_job,
-    ingest_jobs,
-)
+from backend.ingestion.scraping import fetch_remotive_jobs, fetch_adzuna_jobs, ingest_jobs
+from backend.ingestion.normalize import normalize_remotive_job, normalize_adzuna_job
 from backend.models import Jobs
 
 
@@ -18,16 +13,17 @@ def test_fetch_remotive_jobs_success():
     mock_response.json.return_value = {"jobs": [{"title": "Test Job"}]}
 
     with patch('backend.ingestion.scraping.requests.get', return_value=mock_response) as mock_get:
-        url = "https://remotive.com/api/remote-jobs?category=software-dev"
-        jobs = fetch_remotive_jobs(url)
+        jobs = fetch_remotive_jobs()
         assert jobs == [{"title": "Test Job"}]
-        mock_get.assert_called_once_with(url, timeout=10)
+        mock_get.assert_called_once_with(
+            "https://remotive.com/api/remote-jobs?category=software-dev", timeout=10
+        )
 
 
 def test_fetch_remotive_jobs_api_error():
     with patch('backend.ingestion.scraping.requests.get', side_effect=requests.RequestException("Network error")):
         with pytest.raises(ValueError, match="Scraping Error - Error fetching jobs from API: Network error"):
-            fetch_remotive_jobs("https://remotive.com/api/remote-jobs?category=software-dev")
+            fetch_remotive_jobs()
 
 
 def test_fetch_remotive_jobs_invalid_response():
@@ -36,7 +32,7 @@ def test_fetch_remotive_jobs_invalid_response():
 
     with patch('backend.ingestion.scraping.requests.get', return_value=mock_response):
         with pytest.raises(ValueError, match="Scraping Error - Unexpected API response structure"):
-            fetch_remotive_jobs("https://remotive.com/api/remote-jobs?category=software-dev")
+            fetch_remotive_jobs()
 
 
 # --- normalize_remotive_job ---
@@ -51,7 +47,7 @@ def test_normalize_remotive_job():
         "job_type": "Full-time"
     }
 
-    with patch('backend.ingestion.scraping.embed_text', return_value=[0.1] * 384) as mock_embed:
+    with patch('backend.ingestion.normalize.embed_text', return_value=[0.1] * 384) as mock_embed:
         normalized = normalize_remotive_job(job_data)
 
         assert normalized["title"] == "Software Engineer"
@@ -109,7 +105,7 @@ def test_normalize_adzuna_job():
         "contract_type": "permanent",
     }
 
-    with patch('backend.ingestion.scraping.embed_text', return_value=[0.2] * 384) as mock_embed:
+    with patch('backend.ingestion.normalize.embed_text', return_value=[0.2] * 384) as mock_embed:
         normalized = normalize_adzuna_job(job_data)
 
         assert normalized["title"] == "Backend Developer"
@@ -130,7 +126,7 @@ def test_normalize_adzuna_job_non_remote():
         "contract_type": "full_time",
     }
 
-    with patch('backend.ingestion.scraping.embed_text', return_value=[0.1] * 384):
+    with patch('backend.ingestion.normalize.embed_text', return_value=[0.1] * 384):
         normalized = normalize_adzuna_job(job_data)
         assert normalized["remote"] is False
 
@@ -150,7 +146,7 @@ def test_ingest_jobs_success():
          patch('backend.ingestion.scraping.normalize_remotive_job') as mock_norm_r, \
          patch('backend.ingestion.scraping.normalize_adzuna_job') as mock_norm_a, \
          patch('backend.ingestion.scraping.SessionLocal') as mock_session_class, \
-         patch('backend.ingestion.scraping.embed_text', return_value=[0.1] * 384):
+         patch('backend.ingestion.normalize.embed_text', return_value=[0.1] * 384):
 
         mock_session = MagicMock()
         mock_session_class.return_value = mock_session
