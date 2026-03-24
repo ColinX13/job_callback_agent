@@ -1,12 +1,13 @@
 fastapi
 uvicorn
-streamlit
+# streamlit  // old prototype frontend for minimal UI
 requests
 groq
 pypdf2
 numpy
 python-dotenv
-sentence_transformers
+# sentence_transformers  // semantic matching pulls pytorch + CUDA -> requires 2GB of GPU
+fastembed
 python-multipart
 sqlalchemy
 psycopg2-binary

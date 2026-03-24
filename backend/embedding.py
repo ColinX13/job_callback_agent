@@ -1,13 +1,13 @@
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 import numpy as np
 
-# free local model since no Groq embedding model available
-model = SentenceTransformer('all-MiniLM-L6-v2')
+# CPU-only model, no pytorch/CUDA required
+model = TextEmbedding(model_name='BAAI/bge-small-en-v1.5')
 
 def embed_text(text: str):
     if not text:
         return np.zeros((384, )).tolist()  # fallback for empty text
-    embedding = model.encode(text)
+    embedding = next(model.embed([text]))
     return embedding.tolist()
 
 def cosine_sim(a, b):
