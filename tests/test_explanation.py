@@ -16,8 +16,9 @@ def test_explain_match_success():
         assert result == "This is a great fit because..."
         mock_create.assert_called_once()
         call_kwargs = mock_create.call_args
-        assert call_kwargs.kwargs["model"] == "llama-3.1-8b-instant"
-        assert call_kwargs.kwargs["messages"][0]["role"] == "user"
+        assert call_kwargs.kwargs["model"] == "llama-3.3-70b-versatile"
+        assert call_kwargs.kwargs["messages"][0]["role"] == "system"
+        assert call_kwargs.kwargs["messages"][1]["role"] == "user"
 
 
 def test_explain_match_prompt_includes_inputs():
@@ -30,14 +31,14 @@ def test_explain_match_prompt_includes_inputs():
     with patch('backend.explanation.client.chat.completions.create', return_value=mock_response) as mock_create:
         explain_match("My resume text", "Data Scientist", "Analyze data", 0.85)
 
-        prompt = mock_create.call_args.kwargs["messages"][0]["content"]
+        prompt = mock_create.call_args.kwargs["messages"][1]["content"]
         assert "My resume text" in prompt
         assert "Data Scientist" in prompt
         assert "Analyze data" in prompt
-        assert "0.85" in prompt
+        assert "85.0" in prompt
 
 
-def test_explain_match_truncates_resume_to_1000_chars():
+def test_explain_match_full_resume_in_prompt():
     long_resume = "x" * 2000
     mock_choice = MagicMock()
     mock_choice.message.content = "Explanation"
@@ -48,10 +49,8 @@ def test_explain_match_truncates_resume_to_1000_chars():
     with patch('backend.explanation.client.chat.completions.create', return_value=mock_response) as mock_create:
         explain_match(long_resume, "Engineer", "Description", 0.75)
 
-        prompt = mock_create.call_args.kwargs["messages"][0]["content"]
-        # Resume is sliced to [:1000], so the prompt should not contain more than 1000 x's
-        assert "x" * 1001 not in prompt
-        assert "x" * 1000 in prompt
+        prompt = mock_create.call_args.kwargs["messages"][1]["content"]
+        assert "x" * 2000 in prompt
 
 
 def test_explain_match_api_error():
