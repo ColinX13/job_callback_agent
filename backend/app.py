@@ -9,9 +9,9 @@ load_dotenv()
 from fastapi import FastAPI, UploadFile, File, Body, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from backend.db import SessionLocal
+from backend.models import Jobs
 from fastapi.middleware.cors import CORSMiddleware
 from backend.parser import parse_resume
-from backend.embedding import embed_text
 from backend.scoring import rank_jobs
 from backend.explanation import explain_match
 from backend.ingestion.scraping import ingest_jobs
@@ -61,11 +61,10 @@ async def upload_resume(file: UploadFile = File(...)):
     print("Received file:", file.filename)
     try:
         file_bytes = await file.read()
-        text, skills = parse_resume(file_bytes)
-        embedding = embed_text(text)
-        return {"resume_text": text, "skills": skills, "embedding": embedding}
+        text, skills, years_experience, seniority_level = parse_resume(file_bytes)
+        return {"resume_text": text, "skills": skills, "years_experience": years_experience, "seniority_level": seniority_level}
     except Exception as e:
-        return HTTPException(status_code=500, detail=f"Error processing resume data: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing resume data: {str(e)}")
 
 # API endpoint to list all jobs
 @app.get("/jobs/")
@@ -74,33 +73,35 @@ def list_jobs(db: Session = Depends(get_db)):
         jobs = db.query(Jobs).all()
         return {"jobs": jobs}
     except Exception as e:
-        return HTTPException(status_code=500, detail=f"Error fetching jobs: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching jobs: {str(e)}")
 
 # API endpoint to rank jobs based on resume keywords and embedding
 @app.post("/rank_jobs/")
 def rank_jobs_endpoint(payload: dict = Body(...), db: Session = Depends(get_db)):
     try:
         resume_text = payload.get("resume_text")
-        resume_emb = payload.get("embedding") or payload.get("resume_emb")
         resume_skills = payload.get("skills") or payload.get("resume_skills")
-        if not resume_text or not resume_emb or not resume_skills:
-            raise ValueError("Missing required fields: resume_text, embedding, or skills")
-        ranked = rank_jobs(db, resume_text, resume_emb, resume_skills)
+        resume_years = float(payload.get("years_experience") or 0)
+        resume_seniority = payload.get("seniority_level") or "entry"
+        if not resume_text or not resume_skills:
+            raise ValueError("Missing required fields: resume_text or skills")
+        ranked = rank_jobs(db, resume_text, resume_skills, resume_years, resume_seniority)
         return {"ranked_jobs": ranked}
     except Exception as e:
-        return HTTPException(status_code=500, detail=f"Error ranking jobs: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error ranking jobs: {str(e)}")
 
 # API endpoint to explain job match score with LLM prompt
 @app.post("/explain_match/")
 def explain_endpoint(payload: dict = Body(...)):
     try:
-        resume_text = payload["resume_text"]
-        job_title = payload["job_title"]
-        job_desc = payload["job_desc"]
-        score = payload["score"]
-        explanation = explain_match(resume_text, job_title, job_desc, score)
+        resume_text = payload.get("resume_text")
+        job_title = payload.get("job_title")
+        job_desc = payload.get("job_desc")
+        score = payload.get("score")
+        experience = payload.get("experience")
+        if not all([resume_text, job_title, job_desc, score is not None]):
+            raise HTTPException(status_code=400, detail="Missing required fields: resume_text, job_title, job_desc, or score")
+        explanation = explain_match(resume_text, job_title, job_desc, score, experience)
         return {"explanation": explanation}
-    except KeyError as e:
-        raise HTTPException(status_code=400, detail=f"Missing required fields in request: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating score explanation: {str(e)}")

@@ -18,13 +18,15 @@ def test_parse_resume_success():
         # Mock Groq API response
         with patch('backend.parser.client.chat.completions.create') as mock_create:
             mock_response = MagicMock()
-            mock_response.choices[0].message.content = "Python, JavaScript, SQL"
+            mock_response.choices[0].message.content = '{"skills": ["Python", "JavaScript", "SQL"], "total_years_experience": 3, "seniority_level": "mid"}'
             mock_create.return_value = mock_response
-            
-            text, skills = parse_resume(mock_pdf_bytes)
-            
+
+            text, skills, years, seniority = parse_resume(mock_pdf_bytes)
+
             assert text == "Sample resume text with skills."
             assert skills == ["Python", "JavaScript", "SQL"]
+            assert years == 3.0
+            assert seniority == "mid"
             mock_reader_class.assert_called_once()
             mock_create.assert_called_once()
 

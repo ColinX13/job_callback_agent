@@ -1,30 +1,30 @@
-from backend.embedding import embed_text
+from backend.parser import parse_job_requirements
+
 
 def normalize_remotive_job(job):
-    text_for_embedding = (
-        f"{job['title']} {job['description']} {job.get('job_type', '')}"
-    )
-
+    requirements = parse_job_requirements(job["description"])
     return {
         "title": job["title"],
         "company": job["company_name"],
         "description": job["description"],
         "remote": job["candidate_required_location"] == "Worldwide",
         "skills": job.get("tags", []),
-        "embedding": embed_text(text_for_embedding),
+        "embedding": None,
+        "min_years_required": requirements["min_years_required"],
+        "seniority_level": requirements["seniority_level"],
     }
 
-def normalize_adzuna_job(job):
-    title = job.get("title", "")
-    description = job.get("description", "")
-    contract_type = job.get("contract_type", "")
-    text_for_embedding = f"{title} {description} {contract_type}"
 
+def normalize_adzuna_job(job):
+    description = job.get("description", "")
+    requirements = parse_job_requirements(description)
     return {
-        "title": title,
+        "title": job.get("title", ""),
         "company": job.get("company", {}).get("display_name", ""),
         "description": description,
         "remote": "remote" in job.get("location", {}).get("display_name", "").lower(),
         "skills": [],
-        "embedding": embed_text(text_for_embedding),
+        "embedding": None,
+        "min_years_required": requirements["min_years_required"],
+        "seniority_level": requirements["seniority_level"],
     }

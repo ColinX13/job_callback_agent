@@ -14,4 +14,6 @@ class Jobs(Base):
     salary_min = Column(Float)
     salary_max = Column(Float)
     embedding = Column(JSON)
+    min_years_required = Column(Float, nullable=True)
+    seniority_level = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

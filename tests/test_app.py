@@ -45,8 +45,7 @@ async def test_scheduled_scraping():
 
 def test_upload_resume(db_session):
     # Mock parse_resume to return dummy data
-    with patch('backend.app.parse_resume', return_value=("dummy text", ["Python"])), \
-         patch('backend.app.embed_text', return_value=[0.1] * 384):
+    with patch('backend.app.parse_resume', return_value=("dummy text", ["Python"], 3.0, "mid")):
         files = {"file": ("test_resume.pdf", b"fake resume content", "application/pdf")}
         response = client.post("/upload_resume/", files=files)
         assert response.status_code == 200
@@ -54,7 +53,6 @@ def test_upload_resume(db_session):
         assert "resume_text" in data
         assert data["resume_text"] == "dummy text"
         assert "skills" in data
-        assert "embedding" in data
 
 def test_trigger_scraping():
     with patch('backend.app.ingest_jobs') as mock_ingest:

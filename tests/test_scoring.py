@@ -1,8 +1,9 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from backend.db import SessionLocal
-from backend.scoring import rank_jobs, skill_overlap, cosine_sim
+from backend.scoring import rank_jobs, skill_overlap, apply_experience_penalty
 from backend.models import Jobs
+
 
 @pytest.fixture()
 def db_session():
@@ -10,119 +11,177 @@ def db_session():
     yield db
     db.close()
 
-def test_rank_jobs_with_string_embeddings():
-    # Test parsing string embeddings (valid JSON)
-    mock_db = MagicMock()
-    mock_job = MagicMock()
-    mock_job.embedding = '[0.1, 0.2, 0.3]'  # String embedding
-    mock_job.skills = ['python']  # Already list
-    mock_job.id = 1
-    mock_job.title = 'Test Job'
-    mock_job.company = 'Test Co'
-    mock_job.description = 'Desc'
-    mock_db.query.return_value.all.return_value = [mock_job]
-    
-    with patch('backend.scoring.cosine_sim', return_value=0.8), \
-         patch('backend.scoring.skill_overlap', return_value=0.5):
-        result = rank_jobs(mock_db, 'text', [0.1, 0.2, 0.3], ['python'])
-        
-        assert len(result) == 1
-        assert result[0]['score'] == 0.71  # 0.7*0.8 + 0.3*0.5
+
+def make_mock_job(title="Test Job", company="Test Co", description="Desc", skills=None, job_id=1, min_years_required=None, seniority_level="any"):
+    job = MagicMock()
+    job.id = job_id
+    job.title = title
+    job.company = company
+    job.description = description
+    job.skills = skills if skills is not None else ["python"]
+    job.min_years_required = min_years_required
+    job.seniority_level = seniority_level
+    return job
 
 
-def test_rank_jobs_with_invalid_string_embeddings():
-    # Test that invalid string embeddings are re-generated via embed_text
-    mock_db = MagicMock()
-    mock_job = MagicMock()
-    mock_job.embedding = 'invalid json'  # Invalid string — falls back to [], then re-embedded
-    mock_job.skills = ['python']
-    mock_job.id = 1
-    mock_job.title = 'Test Job'
-    mock_job.company = 'Test Co'
-    mock_job.description = 'Desc'
-    mock_db.query.return_value.all.return_value = [mock_job]
-
-    re_embedded = [0.5] * 384
-    with patch('backend.scoring.embed_text', return_value=re_embedded) as mock_embed, \
-         patch('backend.scoring.cosine_sim', return_value=0.0) as mock_cos:
-        result = rank_jobs(mock_db, 'text', [0.1] * 384, ['python'])
-
-        mock_embed.assert_called_once_with('Test Job Desc')
-        mock_cos.assert_called_with([0.1] * 384, re_embedded)
-
-
-def test_rank_jobs_with_string_skills():
-    # Test parsing string skills (valid JSON)
-    mock_db = MagicMock()
-    mock_job = MagicMock()
-    mock_job.embedding = [0.1, 0.2, 0.3]
-    mock_job.skills = '["python", "sql"]'  # String skills
-    mock_job.id = 1
-    mock_job.title = 'Test Job'
-    mock_job.company = 'Test Co'
-    mock_job.description = 'Desc'
-    mock_db.query.return_value.all.return_value = [mock_job]
-    
-    with patch('backend.scoring.cosine_sim', return_value=0.8), \
-         patch('backend.scoring.skill_overlap', return_value=1.0) as mock_overlap:
-        result = rank_jobs(mock_db, 'text', [0.1, 0.2, 0.3], ['python'])
-        
-        mock_overlap.assert_called_with(['python'], ['python', 'sql'])
-
-
-def test_rank_jobs_with_invalid_string_skills():
-    # Test fallback for invalid string skills
-    mock_db = MagicMock()
-    mock_job = MagicMock()
-    mock_job.embedding = [0.1, 0.2, 0.3]
-    mock_job.skills = 'invalid json'  # Invalid string
-    mock_job.id = 1
-    mock_job.title = 'Test Job'
-    mock_job.company = 'Test Co'
-    mock_job.description = 'Desc'
-    mock_db.query.return_value.all.return_value = [mock_job]
-    
-    with patch('backend.scoring.cosine_sim', return_value=0.8), \
-         patch('backend.scoring.skill_overlap', return_value=0.0) as mock_overlap:
-        result = rank_jobs(mock_db, 'text', [0.1, 0.2, 0.3], ['python'])
-        
-        mock_overlap.assert_called_with(['python'], [])  # job_skills falls back to []
-
-def test_cosine_sim():
-    a = [1, 0]
-    b = [0, 1]
-    assert cosine_sim(a, b) == 0.0
+# --- skill_overlap ---
 
 def test_skill_overlap():
-    assert skill_overlap(["Python"], ["Python", "js"]) == 0.5
+    assert skill_overlap(["python"], ["python", "sql"]) == 0.5
 
-def test_rank_jobs(db_session):
-    # Clear existing jobs
-    db_session.query(Jobs).delete()
-    db_session.commit()
 
-    # Add test jobs to the database
-    job1 = Jobs(title="Test Job 1", company="Test Company", description="Test Description", skills=["Python"], embedding=[0.1] * 384)
-    job2 = Jobs(title="Test Job 2", company="Test Company", description="Test Description", skills=["Java"], embedding=[0.4] * 384)
-    db_session.add(job1)
-    db_session.add(job2)
-    db_session.commit()
+def test_skill_overlap_full_match():
+    assert skill_overlap(["python", "sql"], ["python", "sql"]) == 1.0
 
-    resume_text = "Test Text"
-    resume_emb = [0.1] * 384
-    resume_skills = ["Python"]
-    ranked = rank_jobs(db_session, resume_text, resume_emb, resume_skills)
-    assert len(ranked) == 2
-    assert ranked[0]["title"] == "Test Job 1"
-    assert ranked[1]["title"] == "Test Job 2"
+
+def test_skill_overlap_no_match():
+    assert skill_overlap(["python"], ["java"]) == 0.0
+
+
+def test_skill_overlap_no_job_skills():
+    assert skill_overlap(["python"], []) == 0
+
+
+# --- apply_experience_penalty ---
+
+def test_penalty_no_min_years_returns_base():
+    # job_min_years=None → no penalty, return base unchanged
+    assert apply_experience_penalty(0.8, 3.0, None, "any", "mid") == 0.8
+
+
+def test_penalty_hard_filter_large_gap():
+    # job requires 8yrs, candidate has 3 → gap of 5 > 2 → 10% of base
+    result = apply_experience_penalty(0.8, 3.0, 8.0, "senior", "mid")
+    assert result == pytest.approx(0.8 * 0.1)
+
+
+def test_penalty_soft_penalty_within_2_years():
+    # job requires 4yrs, candidate has 3 → gap of 1 → penalty = 1 - (1 * 0.15) = 0.85
+    result = apply_experience_penalty(0.8, 3.0, 4.0, "mid", "mid")
+    assert result == pytest.approx(0.8 * 0.85)
+
+
+def test_penalty_soft_penalty_floored_at_50_pct():
+    # job requires 5yrs, candidate has 3 → gap of 2 → penalty = 1 - (2 * 0.15) = 0.70
+    # but gap must be > candidate (5 > 3) and <= candidate + 2 (5 <= 5), so soft path
+    result = apply_experience_penalty(0.8, 3.0, 5.0, "senior", "mid")
+    assert result == pytest.approx(0.8 * 0.70)
+
+
+def test_penalty_soft_penalty_max_gap_floor():
+    # gap of exactly 2 years: penalty = 1 - (2 * 0.15) = 0.70, max(0.70, 0.5) = 0.70
+    # but if penalty would drop below 0.5, floor applies
+    result = apply_experience_penalty(1.0, 1.0, 3.0, "any", "entry")
+    assert result == pytest.approx(max(1.0 - (2 * 0.15), 0.5))
+
+
+def test_penalty_seniority_mismatch_more_than_one_level():
+    # years satisfied, but entry vs senior = 2 levels apart → 30% of base
+    result = apply_experience_penalty(0.8, 5.0, 4.0, "senior", "entry")
+    assert result == pytest.approx(0.8 * 0.3)
+
+
+def test_penalty_seniority_mismatch_one_level_no_penalty():
+    # years satisfied, entry vs mid = 1 level → no penalty
+    result = apply_experience_penalty(0.8, 3.0, 2.0, "mid", "entry")
+    assert result == pytest.approx(0.8)
+
+
+def test_penalty_years_satisfied_matching_seniority_no_penalty():
+    # years satisfied, seniority matches → return base unchanged
+    result = apply_experience_penalty(0.75, 5.0, 4.0, "senior", "senior")
+    assert result == pytest.approx(0.75)
+
+
+def test_penalty_unknown_seniority_treated_as_entry():
+    # unknown seniority → index 0 (entry), job "senior" = index 2 → gap of 2 → 30% penalty
+    result = apply_experience_penalty(0.8, 5.0, 4.0, "senior", "unknown_level")
+    assert result == pytest.approx(0.8 * 0.3)
+
+
+# --- rank_jobs (unit, mocked DB) ---
+
+def test_rank_jobs_returns_results():
+    mock_db = MagicMock()
+    mock_db.query.return_value.all.return_value = [
+        make_mock_job(title="Python Engineer", description="python flask django")
+    ]
+    result = rank_jobs(mock_db, "python developer flask", ["python"])
+    assert len(result) == 1
+    assert result[0]["title"] == "Python Engineer"
+
+
+def test_rank_jobs_sorted_descending():
+    mock_db = MagicMock()
+    mock_db.query.return_value.all.return_value = [
+        make_mock_job(title="Java Job", description="java spring boot", skills=["java"], job_id=1),
+        make_mock_job(title="Python Job", description="python django flask", skills=["python"], job_id=2),
+    ]
+    result = rank_jobs(mock_db, "python developer", ["python"])
+    assert result[0]["score"] >= result[1]["score"]
+    assert result[0]["title"] == "Python Job"
+
+
+def test_rank_jobs_score_formula():
+    mock_db = MagicMock()
+    mock_db.query.return_value.all.return_value = [
+        make_mock_job(skills=["python"])
+    ]
+    with patch("backend.scoring.cosine_similarity", return_value=[[0.8]]), \
+         patch("backend.scoring.skill_overlap", return_value=0.5):
+        result = rank_jobs(mock_db, "some text", ["python"])
+    assert result[0]["score"] == round(0.7 * 0.8 + 0.3 * 0.5, 3)
+
+
+def test_rank_jobs_returns_top_10():
+    mock_db = MagicMock()
+    mock_db.query.return_value.all.return_value = [
+        make_mock_job(title=f"Job {i}", description=f"description {i}", job_id=i)
+        for i in range(15)
+    ]
+    result = rank_jobs(mock_db, "developer", ["python"])
+    assert len(result) == 10
+
+
+def test_rank_jobs_string_skills_parsed():
+    mock_db = MagicMock()
+    mock_db.query.return_value.all.return_value = [
+        make_mock_job(skills='["python", "sql"]')
+    ]
+    with patch("backend.scoring.skill_overlap", return_value=1.0) as mock_overlap:
+        rank_jobs(mock_db, "some text", ["python"])
+        mock_overlap.assert_called_with(["python"], ["python", "sql"])
+
+
+def test_rank_jobs_invalid_string_skills_fallback():
+    mock_db = MagicMock()
+    mock_db.query.return_value.all.return_value = [
+        make_mock_job(skills="invalid json")
+    ]
+    with patch("backend.scoring.skill_overlap", return_value=0.0) as mock_overlap:
+        rank_jobs(mock_db, "some text", ["python"])
+        mock_overlap.assert_called_with(["python"], [])
+
 
 def test_rank_jobs_exception():
     mock_db = MagicMock()
-    mock_job = MagicMock()
-    mock_job.embedding = [0.1, 0.2, 0.3]
-    mock_job.skills = ['python']
-    mock_db.query.return_value.all.return_value = [mock_job]
-    
-    with patch('backend.scoring.cosine_sim', side_effect=Exception("Sim error")):
+    mock_db.query.return_value.all.return_value = [make_mock_job()]
+    with patch("backend.scoring.cosine_similarity", side_effect=Exception("Sim error")):
         with pytest.raises(ValueError, match="Scoring error - Rank jobs failed: Sim error"):
-            rank_jobs(mock_db, 'text', [0.1, 0.2, 0.3], ['python'])
+            rank_jobs(mock_db, "some text", ["python"])
+
+
+# --- rank_jobs (integration, real DB) ---
+
+def test_rank_jobs_integration(db_session):
+    db_session.query(Jobs).delete()
+    db_session.commit()
+
+    job1 = Jobs(title="Python Engineer", company="Co A", description="python flask django rest api", skills=["python"])
+    job2 = Jobs(title="Java Engineer", company="Co B", description="java spring boot microservices", skills=["java"])
+    db_session.add_all([job1, job2])
+    db_session.commit()
+
+    result = rank_jobs(db_session, "python developer with flask and django experience", ["python"])
+    assert len(result) == 2
+    assert result[0]["title"] == "Python Engineer"

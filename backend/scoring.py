@@ -1,12 +1,8 @@
 import json
 from sqlalchemy.orm import Session
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 from backend.models import Jobs
-from backend.embedding import cosine_sim, embed_text
-
-
-# def load_jobs():
-#     with open("../jobs_data/sample_jobs.json", "r") as f:
-#         return json.load(f)
 
 
 def skill_overlap(resume_skills, job_skills):
@@ -16,22 +12,54 @@ def skill_overlap(resume_skills, job_skills):
     return overlap / len(job_skills)
 
 
-def rank_jobs(db: Session, resume_text, resume_emb, resume_skills):
+def apply_experience_penalty(
+    base_score: float,
+    candidate_years: float,
+    job_min_years: float | None,
+    job_seniority: str,
+    candidate_seniority: str,
+) -> float:
+    if job_min_years is None:
+        return base_score
+
+    # Hard filter: job requires 2+ more years than candidate has
+    if job_min_years > candidate_years + 2:
+        return base_score * 0.1
+
+    # Soft penalty: job requires more experience but within 2 years
+    if job_min_years > candidate_years:
+        gap = job_min_years - candidate_years
+        penalty = 1.0 - (gap * 0.15)  # 15% per year gap
+        return base_score * max(penalty, 0.5)
+
+    # Seniority mismatch even when years are satisfied
+    seniority_order = ["entry", "mid", "senior", "lead"]
+    candidate_level = seniority_order.index(candidate_seniority) if candidate_seniority in seniority_order else 0
+    job_level = seniority_order.index(job_seniority) if job_seniority in seniority_order else candidate_level
+
+    if job_level - candidate_level > 1:
+        return base_score * 0.3
+
+    return base_score
+
+
+def rank_jobs(db: Session, resume_text, resume_skills, resume_years=0.0, resume_seniority="entry"):
     try:
         jobs = db.query(Jobs).all()
-        # print("All jobs: ",jobs[0].title)
-        results = []
-        for job in jobs:
-            job_emb = job.embedding
-            if isinstance(job_emb, str):
-                try:
-                    job_emb = json.loads(job_emb)
-                except Exception:
-                    job_emb = []
-            if len(job_emb) != 384:
-                job_emb = embed_text(f"{job.title} {job.description}")
-            sim = cosine_sim(resume_emb, job_emb)
 
+        # Build corpus: resume first, then all job texts
+        job_texts = [f"{job.title} {job.description or ''}" for job in jobs]
+        corpus = [resume_text] + job_texts
+
+        vectorizer = TfidfVectorizer(stop_words="english")
+        tfidf_matrix = vectorizer.fit_transform(corpus)
+
+        resume_vec = tfidf_matrix[0]
+        job_vecs = tfidf_matrix[1:]
+        sims = cosine_similarity(resume_vec, job_vecs)[0]
+
+        results = []
+        for i, job in enumerate(jobs):
             job_skills = job.skills or []
             if isinstance(job_skills, str):
                 try:
@@ -39,14 +67,23 @@ def rank_jobs(db: Session, resume_text, resume_emb, resume_skills):
                 except Exception:
                     job_skills = []
             overlap = skill_overlap(resume_skills, job_skills)
-            score = round(0.7 * sim + 0.3 * overlap, 3)
+            base_score = round(0.7 * float(sims[i]) + 0.3 * overlap, 3)
+            score = round(apply_experience_penalty(
+                base_score,
+                resume_years,
+                job.min_years_required,
+                job.seniority_level or "any",
+                resume_seniority,
+            ), 3)
             results.append({
                 "id": job.id,
-                "title": job.title, 
+                "title": job.title,
                 "company": job.company,
                 "description": job.description,
                 "skills": job.skills,
-                "score": score
+                "min_years_required": job.min_years_required,
+                "seniority_level": job.seniority_level,
+                "score": score,
             })
         return sorted(results, key=lambda x: x["score"], reverse=True)[:10]
     except Exception as e:

@@ -47,16 +47,14 @@ def test_normalize_remotive_job():
         "job_type": "Full-time"
     }
 
-    with patch('backend.ingestion.normalize.embed_text', return_value=[0.1] * 384) as mock_embed:
-        normalized = normalize_remotive_job(job_data)
+    normalized = normalize_remotive_job(job_data)
 
-        assert normalized["title"] == "Software Engineer"
-        assert normalized["company"] == "Test Co"
-        assert normalized["description"] == "Build apps"
-        assert normalized["remote"] is True
-        assert normalized["skills"] == ["Python", "SQL"]
-        assert normalized["embedding"] == [0.1] * 384
-        mock_embed.assert_called_once_with("Software Engineer Build apps Full-time")
+    assert normalized["title"] == "Software Engineer"
+    assert normalized["company"] == "Test Co"
+    assert normalized["description"] == "Build apps"
+    assert normalized["remote"] is True
+    assert normalized["skills"] == ["Python", "SQL"]
+    assert normalized["embedding"] is None
 
 
 # --- fetch_adzuna_jobs ---
@@ -105,16 +103,14 @@ def test_normalize_adzuna_job():
         "contract_type": "permanent",
     }
 
-    with patch('backend.ingestion.normalize.embed_text', return_value=[0.2] * 384) as mock_embed:
-        normalized = normalize_adzuna_job(job_data)
+    normalized = normalize_adzuna_job(job_data)
 
-        assert normalized["title"] == "Backend Developer"
-        assert normalized["company"] == "Acme Corp"
-        assert normalized["description"] == "Build APIs"
-        assert normalized["remote"] is True
-        assert normalized["skills"] == []
-        assert normalized["embedding"] == [0.2] * 384
-        mock_embed.assert_called_once_with("Backend Developer Build APIs permanent")
+    assert normalized["title"] == "Backend Developer"
+    assert normalized["company"] == "Acme Corp"
+    assert normalized["description"] == "Build APIs"
+    assert normalized["remote"] is True
+    assert normalized["skills"] == []
+    assert normalized["embedding"] is None
 
 
 def test_normalize_adzuna_job_non_remote():
@@ -126,9 +122,8 @@ def test_normalize_adzuna_job_non_remote():
         "contract_type": "full_time",
     }
 
-    with patch('backend.ingestion.normalize.embed_text', return_value=[0.1] * 384):
-        normalized = normalize_adzuna_job(job_data)
-        assert normalized["remote"] is False
+    normalized = normalize_adzuna_job(job_data)
+    assert normalized["remote"] is False
 
 
 # --- ingest_jobs ---
@@ -145,15 +140,14 @@ def test_ingest_jobs_success():
          patch('backend.ingestion.scraping.fetch_adzuna_jobs', return_value=adzuna_jobs), \
          patch('backend.ingestion.scraping.normalize_remotive_job') as mock_norm_r, \
          patch('backend.ingestion.scraping.normalize_adzuna_job') as mock_norm_a, \
-         patch('backend.ingestion.scraping.SessionLocal') as mock_session_class, \
-         patch('backend.ingestion.normalize.embed_text', return_value=[0.1] * 384):
+         patch('backend.ingestion.scraping.SessionLocal') as mock_session_class:
 
         mock_session = MagicMock()
         mock_session_class.return_value = mock_session
         mock_session.query.return_value.filter.return_value.first.return_value = None
 
-        mock_norm_r.return_value = {"title": "Job 1", "company": "Co 1", "description": "Desc 1", "remote": True, "skills": ["Skill1"], "embedding": [0.1]*384}
-        mock_norm_a.return_value = {"title": "Job 2", "company": "Co 2", "description": "Desc 2", "remote": True, "skills": [], "embedding": [0.1]*384}
+        mock_norm_r.return_value = {"title": "Job 1", "company": "Co 1", "description": "Desc 1", "remote": True, "skills": ["Skill1"], "embedding": None, "min_years_required": None, "seniority_level": "any"}
+        mock_norm_a.return_value = {"title": "Job 2", "company": "Co 2", "description": "Desc 2", "remote": True, "skills": [], "embedding": None, "min_years_required": None, "seniority_level": "any"}
 
         ingest_jobs()
 
@@ -167,7 +161,7 @@ def test_ingest_jobs_with_duplicates():
 
     with patch('backend.ingestion.scraping.fetch_remotive_jobs', return_value=remotive_jobs), \
          patch('backend.ingestion.scraping.fetch_adzuna_jobs', return_value=[]), \
-         patch('backend.ingestion.scraping.normalize_remotive_job', return_value={"title": "Job 1", "company": "Co 1", "description": "Desc 1", "remote": True, "skills": [], "embedding": [0.1]*384}), \
+         patch('backend.ingestion.scraping.normalize_remotive_job', return_value={"title": "Job 1", "company": "Co 1", "description": "Desc 1", "remote": True, "skills": [], "embedding": None}), \
          patch('backend.ingestion.scraping.SessionLocal') as mock_session_class:
 
         mock_session = MagicMock()

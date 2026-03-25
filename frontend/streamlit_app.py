@@ -10,23 +10,33 @@ def main():
     uploaded = st.file_uploader("Upload your resume (PDF)")
     if uploaded and "resume_data" not in st.session_state:
         files = {"file": uploaded.getvalue()}
-        print("API_URL: ", API_URL)
         response = requests.post(f"{API_URL}/upload_resume/", files=files)
-        # st.write(response.content)  # Show raw response in Streamlit
         res = response.json()
+        if "resume_text" not in res:
+            st.error(f"Upload failed: {res.get('detail', res)}")
+            st.stop()
         st.session_state.resume_data = res
-    
+
     if "resume_data" in st.session_state:
         resume_text = st.session_state.resume_data["resume_text"]
-        emb = st.session_state.resume_data["embedding"]
         skills = st.session_state.resume_data["skills"]
-        
+        years_experience = st.session_state.resume_data.get("years_experience", 0)
+        seniority_level = st.session_state.resume_data.get("seniority_level", "entry")
+
         if st.button("Find Best Jobs"):
-            payload = {"resume_text": resume_text, "embedding": emb, "skills": skills}
+            payload = {
+                "resume_text": resume_text,
+                "skills": skills,
+                "years_experience": years_experience,
+                "seniority_level": seniority_level,
+            }
             ranked = requests.post(f"{API_URL}/rank_jobs/", json=payload).json()
-            print("Ranked jobs response: ", ranked)  # Debug print
+            print("Ranked jobs response: ", ranked)
+            if "ranked_jobs" not in ranked:
+                st.error(f"Ranking failed: {ranked.get('detail', ranked)}")
+                st.stop()
             st.session_state.ranked_jobs = ranked["ranked_jobs"]
-        
+
     if "ranked_jobs" in st.session_state:
         for idx, job in enumerate(st.session_state.ranked_jobs):
             st.subheader(f"{job['title']} @ {job['company']}")
@@ -37,7 +47,13 @@ def main():
                     "resume_text": resume_text,
                     "job_title": job["title"],
                     "job_desc": job.get("description", ""),
-                    "score": job["score"]
+                    "score": job["score"],
+                    "experience": {
+                        "candidate_years": years_experience,
+                        "candidate_seniority": seniority_level,
+                        "job_min_years": job.get("min_years_required"),
+                        "job_seniority": job.get("seniority_level"),
+                    }
                 }).json()
                 st.info(explain["explanation"])
 

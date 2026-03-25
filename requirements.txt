@@ -6,8 +6,7 @@ groq
 pypdf2
 numpy
 python-dotenv
-# sentence_transformers  // semantic matching pulls pytorch + CUDA -> requires 2GB of GPU
-fastembed
+scikit-learn
 python-multipart
 sqlalchemy
 psycopg2-binary

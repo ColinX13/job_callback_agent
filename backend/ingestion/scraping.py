@@ -68,6 +68,8 @@ def ingest_jobs():
                 remote=normalized["remote"],
                 skills=normalized["skills"],
                 embedding=normalized["embedding"],
+                min_years_required=normalized["min_years_required"],
+                seniority_level=normalized["seniority_level"],
             )
             db.add(db_job)
             inserted_count += 1
