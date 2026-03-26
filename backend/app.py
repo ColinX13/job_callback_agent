@@ -38,9 +38,9 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",          # React frontend local dev
-        "http://localhost:8501",          # Streamlit frontend local dev
-        # "https://your-app.vercel.app"     # React Production
+        "http://localhost:5173",                   # React frontend local dev
+        "http://localhost:8501",                   # Streamlit frontend local dev
+        "https://job-callback-agent.vercel.app/"   # React Production
     ],
     allow_credentials=True,
     allow_methods=["*"],

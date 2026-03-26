@@ -1,6 +1,6 @@
 import type { ResumeData, JobsData } from '../types/index'
 
-const backend_url = 'https://job-matcher-agent.onrender.com'  // alt: run backend locally, replace with 'http://0.0.0.0:8000'
+const backend_url = import.meta.env.VITE_API_URL
 
 export async function uploadResume(file: File): Promise<ResumeData> {
     const formData = new FormData()
