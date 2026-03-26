@@ -17,7 +17,7 @@ def fetch_remotive_jobs():
     except KeyError:
         raise ValueError(f"Scraping Error - Unexpected API response structure: {data}")
 
-def fetch_adzuna_jobs(query="software developer", country="gb", results_per_page=50):
+def fetch_adzuna_jobs(query="software developer", country="us", results_per_page=50):
     app_id = os.getenv("ADZUNA_APP_ID")
     app_key = os.getenv("ADZUNA_APP_KEY")
     url = (

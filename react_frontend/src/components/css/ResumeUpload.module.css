@@ -1,0 +1,23 @@
+.processingText {
+    font-size: 0.9rem;
+}
+
+.uploadComplete {
+    color: green;
+    font-size: 0.9rem;
+}
+
+.fileButton {
+    display: inline-block;
+    padding: 8px 16px;
+    background-color: #94beea;
+    color: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.2s;
+}
+
+.fileButton:hover {
+    background-color: #357abd;
+}

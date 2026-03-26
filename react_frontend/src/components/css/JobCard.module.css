@@ -1,0 +1,25 @@
+.card {
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.cardTitle {
+    margin: 0 0 0.25rem;
+}
+
+.cardMeta {
+    margin: 0 0 0.25rem;
+}
+
+.cardSkills {
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+}
+
+.cardDescription {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #555;
+}

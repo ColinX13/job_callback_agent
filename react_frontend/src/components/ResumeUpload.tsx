@@ -1,6 +1,7 @@
 import type { ResumeData } from '../types/index'
 import { uploadResume } from '../api/client'
 import { useState } from 'react'
+import styles from './css/ResumeUpload.module.css'
 
 type Props = {
     onUpload: (data: ResumeData) => void
@@ -24,11 +25,14 @@ export function ResumeUpload({ onUpload }: Props) {
             {loading && (
                 <div>
                     <progress />
-                    <p style={{ fontSize: "0.9rem" }}>Processing resume ...</p>
+                    <p className={styles.processingText}>Processing resume ...</p>
                 </div>
             )}
-            {done && <p style={{ color: 'green', fontSize: "0.9rem" }}>Upload Complete!</p>}
-            <input type="file" accept=".pdf" onChange={handleFileUpload} />
+            {done && <p className={styles.uploadComplete}>Upload Complete!</p>}
+            <label className={styles.fileButton}>
+                Upload File
+                <input type="file" accept=".pdf" onChange={handleFileUpload} hidden />
+            </label>
         </div>
     )
 }

@@ -5,6 +5,7 @@ import heroImg from './assets/hero.png'
 import './App.css'
 import type { ResumeData } from './types/index'
 import { ResumeUpload } from './components/ResumeUpload'
+import { RankedJobsList } from './components/JobList'
 
 function App() {
   const [resumeData, setResumeData] = useState<ResumeData | null>(null)
@@ -24,7 +25,9 @@ function App() {
             Upload Your Resume Below
             <ResumeUpload onUpload={setResumeData} />
           </h3>
-          <></>
+          <h3>
+            <RankedJobsList resumeData={resumeData}/>
+          </h3>
         </div>
 
       </section>
