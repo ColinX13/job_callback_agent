@@ -1,4 +1,4 @@
-import type { ResumeData, JobsData } from '../types/index'
+import type { ResumeData, JobsData, ExplanationData } from '../types/index'
 
 const backend_url = import.meta.env.VITE_API_URL
 
@@ -35,4 +35,21 @@ export async function rankJobData(resume: ResumeData): Promise<JobsData[]> {
     })
     const data = await res.json()
     return data.ranked_jobs
+}
+
+export async function explainMatch(explanation: ExplanationData): Promise<Record<string, unknown>> {
+    const explanation_payload = JSON.stringify({
+        resume_text: explanation.resume_text,
+        job_title: explanation.job_title,
+        job_desc: explanation.job_desc,
+        score: explanation.score,
+        experience: explanation.experience
+    })
+    const res = await fetch(`${backend_url}/explain_match/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: explanation_payload
+    })
+    const data = await res.json()
+    return data.explanation
 }

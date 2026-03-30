@@ -1,8 +1,54 @@
 import json
 from sqlalchemy.orm import Session
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer, ENGLISH_STOP_WORDS
 from sklearn.metrics.pairwise import cosine_similarity
 from backend.models import Jobs
+
+# Resume and job description boilerplate that adds no discriminative signal
+JOB_RESUME_BOILERPLATE = frozenset([
+    # Job posting boilerplate
+    "responsibilities", "responsibility", "requirements", "required",
+    "qualifications", "qualification", "preferred", "desired",
+    "benefits", "compensation", "salary", "perks",
+    "description", "overview", "summary", "position",
+    "opportunity", "opportunities", "role", "duties",
+    "apply", "application", "applicant", "applicants",
+    "employer", "employment", "employee",
+    "company", "organization",
+    "equal", "diversity", "eeo",
+    # Resume boilerplate
+    "resume", "curriculum", "vitae", "objective",
+    "education", "university", "college", "degree",
+    "references", "available", "request",
+    "experience", "experienced", "professional",
+    # Filler adjectives / phrases
+    "excellent", "strong", "proven", "solid",
+    "outstanding", "exceptional", "passionate",
+    "dynamic", "motivated", "self", "starter",
+    "detail", "oriented", "driven",
+    "fast", "paced", "environment",
+    "ability", "able", "capable",
+    "including", "includes", "etc",
+    "looking", "seeking", "join",
+    # Generic soft skill words
+    "communication", "interpersonal", "organizational",
+    "collaborate", "collaboration", "collaborative",
+    "team", "player", "teamwork",
+    "work", "working", "worked",
+    # Non-discriminative verbs
+    "manage", "managed", "management",
+    "develop", "developed", "developing",
+    "ensure", "ensuring",
+    "support", "supporting", "supported",
+    "provide", "providing", "provided",
+    "maintain", "maintaining", "maintained",
+    "responsible", "lead", "leading",
+    "implement", "implemented", "implementing",
+    "utilize", "utilizing", "utilized",
+    "leverage", "leveraging", "leveraged",
+])
+
+CUSTOM_STOP_WORDS = list(ENGLISH_STOP_WORDS.union(JOB_RESUME_BOILERPLATE))
 
 
 def skill_overlap(resume_skills, job_skills):
@@ -51,7 +97,12 @@ def rank_jobs(db: Session, resume_text, resume_skills, resume_years=0.0, resume_
         job_texts = [f"{job.title} {job.description or ''}" for job in jobs]
         corpus = [resume_text] + job_texts
 
-        vectorizer = TfidfVectorizer(stop_words="english")
+        vectorizer = TfidfVectorizer(
+            stop_words=CUSTOM_STOP_WORDS,
+            ngram_range=(1, 2),
+            max_df=0.85,
+            sublinear_tf=True,
+        )
         tfidf_matrix = vectorizer.fit_transform(corpus)
 
         resume_vec = tfidf_matrix[0]

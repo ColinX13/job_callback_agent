@@ -23,3 +23,17 @@
     font-size: 0.85rem;
     color: #555;
 }
+
+.explanationSection {
+    margin-top: 1rem;
+    margin-bottom : 2rem;
+    text-align: left;
+}
+
+.explanationSummary {
+    margin-bottom: 1.5rem;                                          
+}
+
+.explanationCategory {
+    margin-bottom: 1rem;
+}

@@ -15,3 +15,16 @@ export type JobsData = {
     seniority_level: string | null,
     score: number,
 }
+
+export type ExplanationData = {
+    resume_text: string,
+    job_title: string,
+    job_desc: string,
+    score: number,
+    experience: {
+        candidate_years: number,
+        candidate_seniority: string,
+        job_min_years: number | null,
+        job_seniority: string | null
+    } | null
+}

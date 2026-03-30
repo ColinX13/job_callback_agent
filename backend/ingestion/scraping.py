@@ -7,7 +7,7 @@ from backend.ingestion.normalize import normalize_adzuna_job, normalize_remotive
 
 def fetch_remotive_jobs():
     try:
-        response = requests.get("https://remotive.com/api/remote-jobs?category=software-dev", timeout=10)
+        response = requests.get("https://remotive.com/api/remote-jobs", timeout=10)
         response.raise_for_status()
         data = response.json()
         print(f"Fetched {len(data.get('jobs', []))} jobs from Remotive API")

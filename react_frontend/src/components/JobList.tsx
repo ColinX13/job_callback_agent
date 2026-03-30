@@ -29,7 +29,7 @@ export function RankedJobsList({ resumeData }: Props) {
             )}
 
             {jobs.map(job => (
-                <JobCard key={job.id} job={job} />
+                <JobCard key={job.id} job={job} resumeData={resumeData} />
             ))}
         </div>
     )
