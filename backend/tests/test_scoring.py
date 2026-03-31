@@ -56,23 +56,22 @@ def test_penalty_hard_filter_large_gap():
 
 
 def test_penalty_soft_penalty_within_2_years():
-    # job requires 4yrs, candidate has 3 → gap of 1 → penalty = 1 - (1 * 0.15) = 0.85
+    # job requires 4yrs, candidate has 3 → gap of 1 → penalty = 1 - (1 * 0.10) = 0.90
     result = apply_experience_penalty(0.8, 3.0, 4.0, "mid", "mid")
-    assert result == pytest.approx(0.8 * 0.85)
+    assert result == pytest.approx(0.8 * 0.90)
 
 
 def test_penalty_soft_penalty_floored_at_50_pct():
-    # job requires 5yrs, candidate has 3 → gap of 2 → penalty = 1 - (2 * 0.15) = 0.70
+    # job requires 5yrs, candidate has 3 → gap of 2 → penalty = 1 - (2 * 0.10) = 0.80
     # but gap must be > candidate (5 > 3) and <= candidate + 2 (5 <= 5), so soft path
     result = apply_experience_penalty(0.8, 3.0, 5.0, "senior", "mid")
-    assert result == pytest.approx(0.8 * 0.70)
+    assert result == pytest.approx(0.8 * 0.80)
 
 
 def test_penalty_soft_penalty_max_gap_floor():
-    # gap of exactly 2 years: penalty = 1 - (2 * 0.15) = 0.70, max(0.70, 0.5) = 0.70
-    # but if penalty would drop below 0.5, floor applies
+    # gap of exactly 2 years: penalty = 1 - (2 * 0.10) = 0.80, max(0.80, 0.5) = 0.80
     result = apply_experience_penalty(1.0, 1.0, 3.0, "any", "entry")
-    assert result == pytest.approx(max(1.0 - (2 * 0.15), 0.5))
+    assert result == pytest.approx(max(1.0 - (2 * 0.10), 0.5))
 
 
 def test_penalty_seniority_mismatch_more_than_one_level():

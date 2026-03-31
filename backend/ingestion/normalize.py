@@ -1,12 +1,18 @@
+import re
 from backend.parser import parse_job_requirements
 
 
+def strip_html(text: str) -> str:
+    return re.sub(r"<[^>]+>", " ", text).strip()
+
+
 def normalize_remotive_job(job):
-    requirements = parse_job_requirements(job["description"])
+    description = strip_html(job.get("description", ""))
+    requirements = parse_job_requirements(description)
     return {
         "title": job["title"],
         "company": job["company_name"],
-        "description": job["description"],
+        "description": description,
         "remote": job["candidate_required_location"] == "Worldwide",
         "skills": job.get("tags", []),
         "embedding": None,

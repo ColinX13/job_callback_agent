@@ -16,7 +16,7 @@ def test_fetch_remotive_jobs_success():
         jobs = fetch_remotive_jobs()
         assert jobs == [{"title": "Test Job"}]
         mock_get.assert_called_once_with(
-            "https://remotive.com/api/remote-jobs?category=software-dev", timeout=10
+            "https://remotive.com/api/remote-jobs", timeout=10
         )
 
 

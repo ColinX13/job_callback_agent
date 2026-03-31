@@ -75,7 +75,7 @@ def apply_experience_penalty(
     # Soft penalty: job requires more experience but within 2 years
     if job_min_years > candidate_years:
         gap = job_min_years - candidate_years
-        penalty = 1.0 - (gap * 0.15)  # 15% per year gap
+        penalty = 1.0 - (gap * 0.10)  # 10% per year gap
         return base_score * max(penalty, 0.5)
 
     # Seniority mismatch even when years are satisfied
@@ -88,6 +88,14 @@ def apply_experience_penalty(
 
     return base_score
 
+### --- Scoring functionality for Web App with Jobs DB, using TF-IDF Vectorization
+def _build_vectorizer():
+    return TfidfVectorizer(
+        stop_words=CUSTOM_STOP_WORDS,
+        ngram_range=(1, 2),
+        max_df=0.85,
+        sublinear_tf=True,
+    )
 
 def rank_jobs(db: Session, resume_text, resume_skills, resume_years=0.0, resume_seniority="entry"):
     try:
@@ -97,12 +105,7 @@ def rank_jobs(db: Session, resume_text, resume_skills, resume_years=0.0, resume_
         job_texts = [f"{job.title} {job.description or ''}" for job in jobs]
         corpus = [resume_text] + job_texts
 
-        vectorizer = TfidfVectorizer(
-            stop_words=CUSTOM_STOP_WORDS,
-            ngram_range=(1, 2),
-            max_df=0.85,
-            sublinear_tf=True,
-        )
+        vectorizer = _build_vectorizer()
         tfidf_matrix = vectorizer.fit_transform(corpus)
 
         resume_vec = tfidf_matrix[0]
@@ -139,3 +142,54 @@ def rank_jobs(db: Session, resume_text, resume_skills, resume_years=0.0, resume_
         return sorted(results, key=lambda x: x["score"], reverse=True)[:10]
     except Exception as e:
         raise ValueError(f"Scoring error - Rank jobs failed: {str(e)}")
+    
+### --- Scoring functionality for Chrome Extension, only TF Vectorization
+def _build_single_job_vectorizer():
+    return TfidfVectorizer(
+        stop_words=CUSTOM_STOP_WORDS,
+        ngram_range=(1, 2),
+        sublinear_tf=True,
+        use_idf=False,  # Pure TF — IDF meaningless with only 2 docs
+    )
+
+
+def extract_skills_from_text(text, reference_skills):
+    """Find which reference skills appear in the text (case-insensitive)."""
+    text_lower = text.lower()
+    return [s for s in reference_skills if s.lower() in text_lower]
+
+
+def score_single_job(resume_text, job_description, resume_skills=None, resume_years=0.0, resume_seniority="entry"):
+    """Score a single job description against a resume. No DB required."""
+    try:
+        from backend.parser import parse_job_requirements
+
+        corpus = [resume_text, job_description]
+        vectorizer = _build_single_job_vectorizer()
+        tf_matrix = vectorizer.fit_transform(corpus)
+        tf_sim = float(cosine_similarity(tf_matrix[0], tf_matrix[1])[0][0])
+
+        # Parse job requirements for experience/seniority penalties
+        requirements = parse_job_requirements(job_description)
+        job_min_years = requirements["min_years_required"]
+        job_seniority = requirements["seniority_level"] or "any"
+
+        # Extract job skills from JD text by matching against resume skills
+        overlap = 0.0
+        if resume_skills:
+            matched_skills = extract_skills_from_text(job_description, resume_skills)
+            overlap = skill_overlap(resume_skills, matched_skills)
+
+        base_score = round(0.7 * tf_sim + 0.3 * overlap, 3)
+        score = round(apply_experience_penalty(
+            base_score, resume_years, job_min_years, job_seniority, resume_seniority,
+        ), 3)
+
+        return {
+            "score": score,
+            "tf_similarity": round(tf_sim, 3),
+            "min_years_required": job_min_years,
+            "seniority_level": job_seniority,
+        }
+    except Exception as e:
+        raise ValueError(f"Scoring error - score_single_job failed: {str(e)}")

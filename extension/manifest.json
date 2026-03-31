@@ -1,0 +1,37 @@
+{
+    "manifest_version": 3,
+    "name": "job_callback_agent",
+    "version": "1.0.0",
+    "description": "Instant job fit analysis for roles on Greenhouse or Lever.",
+
+    "permissions": [
+        "storage",
+        "activeTab",
+        "scripting"
+    ],
+
+    "host_permissions": [
+        "https://boards.greenhouse.io/*",
+        "https://job-boards.greenhouse.io/*",
+        "https://jobs.lever.co/*",
+        "https://job-matcher-agent.onrender.com/*",
+        "https://jobs.ashbyhq.com/*"
+    ],
+
+    "content_scripts": [
+        {
+            "matches": [
+                "https://*.greenhouse.io/*/*",
+                "https://*.lever.co/*/*",
+                "https://jobs.ashbyhq.com/*/*"
+            ],
+            "js": ["config.js", "content_script.js"],
+            "css": ["sidebar.css"],
+            "run_at": "document_idle"
+        }
+    ],
+
+    "action": {
+        "default_popup": "popup.html"
+    }
+}

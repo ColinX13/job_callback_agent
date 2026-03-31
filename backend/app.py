@@ -12,9 +12,12 @@ from backend.db import SessionLocal
 from backend.models import Jobs
 from fastapi.middleware.cors import CORSMiddleware
 from backend.parser import parse_resume
-from backend.scoring import rank_jobs
+from backend.scoring import rank_jobs, score_single_job
 from backend.explanation import explain_match
 from backend.ingestion.scraping import ingest_jobs
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from starlette.requests import Request
 
 
 ### Scheduled scraping background task
@@ -40,7 +43,12 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",                   # React frontend local dev
         "http://localhost:8501",                   # Streamlit frontend local dev
-        "https://job-callback-agent.vercel.app"    # React Production
+        "https://job-callback-agent.vercel.app",   # React Production
+        "chrome-extension://mjcgcclfkpeijeckfehkecmcgjmfojfc",  # Chrome Extension
+        "https://boards.greenhouse.io",             # Greenhouse job pages
+        "https://job-boards.greenhouse.io",         # Greenhouse alt domain
+        "https://jobs.lever.co",                    # Lever job pages
+        "https://jobs.ashbyhq.com"                  # Ashby job pages
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -59,6 +67,7 @@ def trigger_scraping(background_tasks: BackgroundTasks):
     background_tasks.add_task(ingest_jobs)
     return {"status": "Scraping started in background"}
 
+##### Web App API for Frontend -> Server communication
 # API endpoint to upload resume and get embedding
 @app.post("/upload_resume/")
 async def upload_resume(file: UploadFile = File(...)):
@@ -109,3 +118,51 @@ def explain_endpoint(payload: dict = Body(...)):
         return {"explanation": explanation}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating score explanation: {str(e)}")
+    
+##### Chrome Extension APIs
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+
+# Score a single job description against a resume and return analysis
+@app.post("/extension/analyze_one_job/")
+@limiter.limit("20/minute")
+def analyze_one_job(request: Request, payload: dict = Body(...)):
+    try:
+        print("Python backend running?")
+        resume_text = payload.get("resume_text")
+        job_description = payload.get("job_description")
+        print("Resume Text parsed success")
+        print("JD also parsed")
+        job_title = payload.get("job_title", "")
+        resume_skills = payload.get("skills", [])
+        resume_years = float(payload.get("years_experience") or 0)
+        resume_seniority = payload.get("seniority_level") or "entry"
+        if not resume_text or not job_description:
+            raise HTTPException(status_code=400, detail="Missing required fields: resume_text or job_description")
+
+        score_result = score_single_job(
+            resume_text, job_description, resume_skills, resume_years, resume_seniority,
+        )
+
+        experience = {
+            "candidate_years": resume_years,
+            "candidate_seniority": resume_seniority,
+            "job_min_years": score_result["min_years_required"],
+            "job_seniority": score_result["seniority_level"],
+        }
+        explanation = explain_match(
+            resume_text, job_title, job_description, score_result["score"], experience,
+        )
+
+        return {
+            "score": score_result["score"],
+            "candidate_experience": {
+                "years": resume_years,
+                "seniority_level": resume_seniority,
+            },
+            "explanation": explanation,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error analyzing job: {str(e)}")
